@@ -359,7 +359,7 @@ then
 	# be ready to boot. Therefore, after loading the fs module, we will wait 5 seconds
 	# for the root block device to appear.
 
-	good_msg "Looking for root filesystem"
+	good_msg "Looking for root block device..."
 
 	count=0
 	# wait 5 seconds, hoping to see the root block device...
@@ -368,6 +368,8 @@ then
 		count=$(($count + 1))
 	done
 	echo
+
+	good_msg "No root block device found yet, continuing with modules scan..."
 
 	# Root block device still not visible...
 
@@ -384,7 +386,7 @@ then
 			good_msg 'Loading module subsystems manually'
 			for modules in ${MY_HWOPTS}
 			do
-				if [ "$ROOTFSTYPE" != "auto" ] && [ -b "$REAL_ROOT" ]; then
+				if [ -b "$REAL_ROOT" ]; then
 					echo "${BOLD}Root filesystem $REAL_ROOT exists, continuing..."
 					break
 				fi

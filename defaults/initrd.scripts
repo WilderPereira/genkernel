@@ -37,7 +37,7 @@ modules_scan() {
 			echo -e "${BOLD}   ::${NORMAL} Skipping ${x}..."
 		elif [ "${MLOAD}" = "${MLIST}" ] # == No change == No specified no-load
 		then
-			if [ "${ROOTFSTYPE}" != 'auto' ] && [ -b "${REAL_ROOT}" ]; then
+			if [ -b "${REAL_ROOT}" ]; then
 				echo "Root block device found, continuing..."
 				break
 			fi
