@@ -13,7 +13,6 @@ modules_load() {
 	do
 		echo ${module} >> /etc/modules/$fn
 	done
-
 	modules_scan $fn
 }
 
@@ -21,7 +20,15 @@ modules_scan() {
 	local MODS
 	[ -d "/etc/modules/${1}" ] || touch /etc/modules/${1}
 
-	[ -f "/etc/modules/${1}" ] && MODS=`cat /etc/modules/${1}`
+	[ ! -f "/etc/modules/${1}" ] && return 
+	[ "$DONE_HWOPTS" != "${DONE_HWOPTS%%:$1:*}" ]; then
+		# already scanned, do not do it again:
+		return
+	else
+		# DONE_HWOPTS is colon-delimited: record that we're loading this set:
+		DONE_HWOPTS="${DONE_HWOPTS}${1}:"
+	fi	
+	MODS=`cat /etc/modules/${1}`
 	for x in ${MODS}
 	do
 		MLOAD=`echo ${MLIST} | sed -e "s/.*${x}.*/${x}/"`
@@ -398,6 +405,8 @@ prompt_user(){
 	# $2 = label
 	# $3 = optional explanations for failure
 
+	# need USB for keyboard, often times ... make sure it's loaded.
+	modules_scan usb
 	eval local oldvalue='$'${1}
 
 	[ \( $# != 2 \) -a \( $# != 3 \) ] && \
@@ -530,6 +539,7 @@ setup_keymap() {
 }
 
 chooseKeymap() {
+	modules_scan usb
 	good_msg "Loading keymaps"
 	if [ -z "${keymap}" ]
 	then

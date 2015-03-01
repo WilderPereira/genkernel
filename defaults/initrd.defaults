@@ -80,5 +80,10 @@ DEFAULT_NFSOPTIONS="ro,nolock,rsize=1024,wsize=1024"
 
 # Only sections that are in by default or those that
 # are not module groups need to be defined here...
+# ones already scanned, so we can be smart and call multiple times if needed without worry:
+DONE_HWOPTS=':'
+# ones available for do/no* kernel param options:
 HWOPTS='keymap cache modules sata scsi pata usb firewire waitscan slowusb lvm dmraid mdadm fs net'
-MY_HWOPTS='modules sata scsi pata slowusb usb firewire waitscan dmraid mdadm fs net iscsi crypto'
+# default things enabled:
+MY_HWOPTS='modules'
+EXTRA_HWOPTS='sata scsi pata slowusb usb firewire waitscan dmraid mdadm fs net iscsi crypto'

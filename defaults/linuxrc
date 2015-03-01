@@ -205,7 +205,6 @@ do
 		root_trim=*)
 			CRYPT_ROOT_TRIM=${x#*=}
 		;;
-
 		swap_key=*)
 			CRYPT_SWAP_KEY=${x#*=}
 		;;
@@ -319,17 +318,18 @@ then
 elif [ -d "/lib/modules/${KV}" ]
 then
 	good_msg 'Loading modules'
+
+	# Try these modules first -- these are modules the user specified that are required for
+	# using the root device...
+
 	if [ -n "$FIRSTMODS" ]; then
-		# try these modules first -- detected modules for root device:
 		modules_load firstmods ${FIRSTMODS}
 	fi
-	# Load appropriate kernel modules
-	if [ ! -b "${REAL_ROOT}" ] && [ "${ROOTFSTYPE}" != "auto" ]; then
-		# if the root filesystem type was specified, then try to load the corresponding FS module first:
-		if find /lib/modules/${KV} | grep /"${ROOTFSTYPE}${KSUFF}" > /dev/null 2>&1; then
-			modprobe $ROOTFSTYPE -n
-		fi
-	fi
+
+	# Now, load any subsystems specified via do* kernel boot options -- note that this version
+	# of genkernel defaults to NOT enabling any subsystems by default, so this will reflect
+	# the user's settings only.
+
 	if [ "${NODETECT}" != '1' ]
 	then
 		for modules in ${MY_HWOPTS}
@@ -341,8 +341,50 @@ then
 			modules_scan ${modules}
 		done
 	fi
-	# Always eval doload=...
+
+	# Now, we'll respect the legacy doload= option and load any user-specified modules here.
+
 	modules_load extra_load ${MDOLIST}
+
+	# Now, if the root filesystem type is "auto", we'll require all filesystem modules to be
+	# loaded to properly detect the type of filesystem:
+
+	if [ "${ROOTFSTYPE}" == "auto" ]; then
+		modules_load fs
+	else
+
+		# if the root filesystem type was specified, then try to load just the filesystem
+		# module that we need. At this point, assuming the user specified the subsystems
+		# the system requires to boot, the block device should become visible and we should
+		# be ready to boot. Therefore, after loading the fs module, we will wait 5 seconds
+		# for the root block device to appear.
+
+		if find /lib/modules/${KV} | grep /"${ROOTFSTYPE}${KSUFF}" > /dev/null 2>&1; then
+			modprobe $ROOTFSTYPE -n
+		fi
+		count=0
+		# wait 5 seconds, hoping to see the root filesystem...
+		while [ ! -b "${REAL_ROOT}" ] && [ $count -lt 50 ]; do
+			sleep 0.1; echo -n "."
+			count=$(($count + 1))
+		done
+		echo
+	fi
+
+	if [ "${NODETECT}" != '1' ]; then
+		sleep 5
+
+		# We've now slept an additional 5 seconds. If the root block device is not visible,
+		# we will try automatically loading modules for each extra subsystem, and see if that
+		# causes the block device to show up:
+
+		if [ ! -b "${REAL_ROOT}" ]; then
+			for modules in ${EXTRA_HWOPTS}; do
+				modules_scan ${modules}
+				sleep 1
+			done
+		fi
+	fi
 else
 	good_msg 'Skipping module load; no modules in the ramdisk!'
 fi
@@ -664,7 +706,7 @@ do
 done
 # End determine root device
 
-#verbose_kmsg
+# BEGIN CD/UNIONFS BOOTING ....
 
 # If CD root is set determine the looptype to boot
 if [ "${CDROOT}" = '1' ]
@@ -879,6 +921,9 @@ else
 	fi
 fi
 
+# END CD/UNIONFS BOOTING
+
+
 # Mount the additional things as required by udev & systemd
 if [ -f ${NEW_ROOT}/etc/initramfs.mounts ]; then
 	fslist=$(get_mounts_list)
@@ -954,7 +999,7 @@ exec /sbin/switch_root -c "/dev/console" "${CHROOT}" "${REAL_INIT:-/sbin/init}" 
 
 # If we get here, something bad has happened
 splash 'verbose'
-
+modules_scan usb
 echo "A fatal error has probably occured since ${REAL_INIT:-/sbin/init} did not"
 echo "boot correctly. Trying to open a shell..."
 echo
