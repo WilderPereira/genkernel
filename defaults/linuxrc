@@ -300,16 +300,13 @@ mount_devfs
 mount_sysfs
 
 # Initialize mdev
-if [ "${KV_2_6_OR_GREATER}" ]
-then
-	good_msg 'Activating mdev'
+good_msg 'Activating mdev'
 
-	# Serialize hotplug events
-	touch /dev/mdev.seq
+# Serialize hotplug events
+touch /dev/mdev.seq
 
-	# Setup hotplugging for firmware loading
-	echo /sbin/mdev > /proc/sys/kernel/hotplug
-fi
+# Setup hotplugging for firmware loading
+echo /sbin/mdev > /proc/sys/kernel/hotplug
 
 # Load modules listed in MY_HWOPTS if /lib/modules exists for the running kernel
 if [ -z "${DO_modules}" ]
@@ -323,77 +320,116 @@ then
 	# using the root device...
 
 	if [ -n "$FIRSTMODS" ]; then
+		good_msg 'Loading first modules'
 		modules_load firstmods ${FIRSTMODS}
 	fi
 
-	# Now, load any subsystems specified via do* kernel boot options -- note that this version
-	# of genkernel defaults to NOT enabling any subsystems by default, so this will reflect
-	# the user's settings only.
-
-	if [ "${NODETECT}" != '1' ]
-	then
-		for modules in ${MY_HWOPTS}
-		do
-			if [ "$ROOTFSTYPE" != "auto" ] && [ -b "$REAL_ROOT" ]; then
-				echo "${BOLD}Root filesystem $REAL_ROOT exists, continuing..."
-				break
-			fi
-			modules_scan ${modules}
-		done
-	fi
-
-	# Now, we'll respect the legacy doload= option and load any user-specified modules here.
-
-	modules_load extra_load ${MDOLIST}
-
-	# Now, if the root filesystem type is "auto", we'll require all filesystem modules to be
-	# loaded to properly detect the type of filesystem:
-
 	if [ "${ROOTFSTYPE}" == "auto" ]; then
+		good_msg 'Manually loading filesystem modules'
 		modules_load fs
 	else
-
 		# if the root filesystem type was specified, then try to load just the filesystem
-		# module that we need. At this point, assuming the user specified the subsystems
-		# the system requires to boot, the block device should become visible and we should
-		# be ready to boot. Therefore, after loading the fs module, we will wait 5 seconds
-		# for the root block device to appear.
-
+		# module that we need. 
 		if find /lib/modules/${KV} | grep /"${ROOTFSTYPE}${KSUFF}" > /dev/null 2>&1; then
 			modprobe $ROOTFSTYPE -n
 		fi
-		count=0
-		# wait 5 seconds, hoping to see the root filesystem...
-		while [ ! -b "${REAL_ROOT}" ] && [ $count -lt 50 ]; do
-			sleep 0.1; echo -n "."
-			count=$(($count + 1))
-		done
-		echo
+	
 	fi
 
-	if [ "${NODETECT}" != '1' ]; then
-		sleep 5
+	# Now, we will try auto-loading stuff via /sys -- this part is experimental.
 
-		# We've now slept an additional 5 seconds. If the root block device is not visible,
-		# we will try automatically loading modules for each extra subsystem, and see if that
-		# causes the block device to show up:
+	good_msg 'Loading modules automatically vis /sys'
+	
+	mdev -s || bad_msg "mdev -s failed"
+	
+	for i in /sys/class/net/*/uevent; do printf 'add' > "$i"; done 2>/dev/null; unset i
+	for i in /sys/bus/usb/devices/*; do
+		case "${i##*/}" in
+			[0-9]*-[0-9]*)
+				printf 'add' > "$i/uevent"
+				;;
+		esac
+	done
 
-		if [ ! -b "${REAL_ROOT}" ]; then
-			for modules in ${EXTRA_HWOPTS}; do
+	find /sys -name 'modalias' -type f -exec cat '{}' + | sort -u | xargs modprobe -b -a 2>/dev/null 
+	find /sys -name 'modalias' -type f -exec cat '{}' + | sort -u | xargs modprobe -b -a 2>/dev/null 
+
+	# At this point, assuming the user specified the subsystems
+	# the system requires to boot, the block device should become visible and we should
+	# be ready to boot. Therefore, after loading the fs module, we will wait 5 seconds
+	# for the root block device to appear.
+
+	good_msg "Looking for root filesystem"
+
+	count=0
+	# wait 5 seconds, hoping to see the root block device...
+	while [ ! -b "${REAL_ROOT}" ] && [ $count -lt 50 ]; do
+		sleep 0.1; echo -n "."
+		count=$(($count + 1))
+	done
+	echo
+
+	# Root block device still not visible...
+
+	if [ ! -b "${REAL_ROOT}" ]; then
+	
+		# BEGIN TRADITIONAL LEGACY MODULE MANUAL-LOADING
+
+		# Now, load any subsystems specified via do* kernel boot options -- note that this version
+		# of genkernel defaults to NOT enabling any subsystems by default, so this will reflect
+		# the user's settings only.
+
+		if [ "${NODETECT}" != '1' ]
+		then
+			good_msg 'Loading module subsystems manually'
+			for modules in ${MY_HWOPTS}
+			do
+				if [ "$ROOTFSTYPE" != "auto" ] && [ -b "$REAL_ROOT" ]; then
+					echo "${BOLD}Root filesystem $REAL_ROOT exists, continuing..."
+					break
+				fi
 				modules_scan ${modules}
-				sleep 1
 			done
 		fi
+
+		# Now, if the root filesystem type is "auto", we'll require all filesystem modules to be
+		# loaded to properly detect the type of filesystem:
+
+		if [ "${ROOTFSTYPE}" == "auto" ]; then
+			modules_load fs
+		else
+
+			count=0
+			# wait 5 seconds, hoping to see the root filesystem...
+			while [ ! -b "${REAL_ROOT}" ] && [ $count -lt 50 ]; do
+				sleep 0.1; echo -n "."
+				count=$(($count + 1))
+			done
+			echo
+		fi
+
+		if [ "${NODETECT}" != '1' ]; then
+			sleep 5
+
+			# We've now slept an additional 5 seconds. If the root block device is not visible,
+			# we will try automatically loading modules for each extra subsystem, and see if that
+			# causes the block device to show up:
+
+			if [ ! -b "${REAL_ROOT}" ]; then
+				for modules in ${EXTRA_HWOPTS}; do
+					modules_scan ${modules}
+					sleep 1
+				done
+			fi
+		fi
+
+	# Finally, we'll respect the legacy doload= option and load any user-specified modules here.
+	modules_load extra_load ${MDOLIST}
 	fi
 else
 	good_msg 'Skipping module load; no modules in the ramdisk!'
 fi
 
-# Ensure that device nodes are properly configured
-if [ "${KV_2_6_OR_GREATER}" ]
-then
-	mdev -s || bad_msg "mdev -s failed"
-fi
 
 # Apply scan delay if specified
 sdelay
