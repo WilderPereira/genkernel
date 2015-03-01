@@ -21,7 +21,7 @@ modules_scan() {
 	[ -d "/etc/modules/${1}" ] || touch /etc/modules/${1}
 
 	[ ! -f "/etc/modules/${1}" ] && return 
-	[ "$DONE_HWOPTS" != "${DONE_HWOPTS%%:$1:*}" ]; then
+	if [ "$DONE_HWOPTS" != "${DONE_HWOPTS%%:$1:*}" ]; then
 		# already scanned, do not do it again:
 		return
 	else
