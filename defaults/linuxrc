@@ -324,6 +324,9 @@ then
 		modules_load firstmods ${FIRSTMODS}
 	fi
 
+		# Now, if the root filesystem type is "auto", we'll require all filesystem modules to be
+		# loaded to properly detect the type of filesystem:
+
 	if [ "${ROOTFSTYPE}" == "auto" ]; then
 		good_msg 'Manually loading filesystem modules'
 		modules_load fs
@@ -381,48 +384,27 @@ then
 		# of genkernel defaults to NOT enabling any subsystems by default, so this will reflect
 		# the user's settings only.
 
-		if [ "${NODETECT}" != '1' ]
-		then
-			good_msg 'Loading module subsystems manually'
-			for modules in ${MY_HWOPTS}
-			do
-				if [ -b "$REAL_ROOT" ]; then
-					echo "${BOLD}Root filesystem $REAL_ROOT exists, continuing..."
-					break
-				fi
+		good_msg 'Loading module subsystems manually'
+		for modules in ${MY_HWOPTS}
+		do
+			if [ -b "$REAL_ROOT" ]; then
+				echo "${BOLD}Root filesystem $REAL_ROOT exists, continuing..."
+				break
+			else
 				modules_scan ${modules}
-			done
-		fi
+			fi
+		done
 
-		# Now, if the root filesystem type is "auto", we'll require all filesystem modules to be
-		# loaded to properly detect the type of filesystem:
-
-		if [ "${ROOTFSTYPE}" == "auto" ]; then
-			modules_load fs
-		else
-
-			count=0
-			# wait 5 seconds, hoping to see the root filesystem...
-			while [ ! -b "${REAL_ROOT}" ] && [ $count -lt 50 ]; do
-				sleep 0.1; echo -n "."
-				count=$(($count + 1))
-			done
-			echo
-		fi
-
-		if [ "${NODETECT}" != '1' ]; then
-			sleep 5
-
-			# We've now slept an additional 5 seconds. If the root block device is not visible,
+			# If the root block device is not visible,
 			# we will try automatically loading modules for each extra subsystem, and see if that
 			# causes the block device to show up:
 
-			if [ ! -b "${REAL_ROOT}" ]; then
-				for modules in ${EXTRA_HWOPTS}; do
+		if [ ! -b "${REAL_ROOT}" ]; then
+			for modules in ${EXTRA_HWOPTS}; do
+				if [ ! -b "$REAL_ROOT" ];  then
 					modules_scan ${modules}
-					sleep 1
-				done
-			fi
+				fi
+			done
 		fi
 
 	# Finally, we'll respect the legacy doload= option and load any user-specified modules here.

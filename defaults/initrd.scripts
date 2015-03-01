@@ -38,7 +38,7 @@ modules_scan() {
 		elif [ "${MLOAD}" = "${MLIST}" ] # == No change == No specified no-load
 		then
 			if [ -b "${REAL_ROOT}" ]; then
-				echo "Root block device found, continuing..."
+				echo "Root block device found, skipping other modules..."
 				break
 			fi
 			[ -n "${DEBUG}" ] && echo -ne "${BOLD}   ::${NORMAL} Checking for ${x}..."
