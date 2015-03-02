@@ -129,9 +129,9 @@ do
 			NODETECT=1
 		;;
 		noload=*)
-			MLIST=${x#*=}
-			MLIST="$(echo ${MLIST} | sed -e 's/,/ /g')"
-			export MLIST
+			NOLOAD=${x#*=}
+			NOLOAD="$(echo ${NOLOAD} | sed -e 's/,/ /g')"
+			export NOLOAD
 		;;
 		# Redirect output to a specific tty
 		CONSOLE=*|console=*)
@@ -343,19 +343,20 @@ then
 
 	good_msg 'Loading modules automatically vis /sys'
 	
-	mdev -s || bad_msg "mdev -s failed"
-	
-	for i in /sys/class/net/*/uevent; do printf 'add' > "$i"; done 2>/dev/null; unset i
+	for i in /sys/class/net/*/uevent; do echo $i; printf 'add' > "$i"; done 2>/dev/null; unset i
 	for i in /sys/bus/usb/devices/*; do
 		case "${i##*/}" in
 			[0-9]*-[0-9]*)
+				echo $i
 				printf 'add' > "$i/uevent"
 				;;
 		esac
 	done
 
-	find /sys -name 'modalias' -type f -exec cat '{}' + | sort -u | xargs modprobe -b -a 2>/dev/null 
-	find /sys -name 'modalias' -type f -exec cat '{}' + | sort -u | xargs modprobe -b -a 2>/dev/null 
+	find /sys -name 'modalias' -type f -exec cat '{}' + | sort -u | xargs mod_single_load
+	find /sys -name 'modalias' -type f -exec cat '{}' + | sort -u | xargs mod_single_load
+	
+	mdev -s || bad_msg "mdev -s failed"
 
 	# At this point, assuming the user specified the subsystems
 	# the system requires to boot, the block device should become visible and we should

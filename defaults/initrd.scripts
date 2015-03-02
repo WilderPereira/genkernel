@@ -16,10 +16,23 @@ modules_load() {
 	modules_scan $fn
 }
 
+mod_single_load() {
+	MLOAD=`echo ${NOLOAD} | sed -e "s/.*${x}.*/${x}/"`
+	if [ "${MLOAD}" = "${x}" ] # Only module to no-load
+	then
+		echo -e "${BOLD}   ::${NORMAL} Skipping ${x}..."
+	elif [ "${MLOAD}" = "${NOLOAD}" ] # == No change == No specified no-load
+	then
+		echo -ne "${BOLD}   ::${NORMAL} Scanning for ${1}..."
+		modprobe ${1}
+		backup
+		echo -ne "${NORMAL}"
+	fi
+}
+
 modules_scan() {
 	local MODS
 	[ -d "/etc/modules/${1}" ] || touch /etc/modules/${1}
-
 	[ ! -f "/etc/modules/${1}" ] && return 
 	if [ "$DONE_HWOPTS" != "${DONE_HWOPTS%%:$1:*}" ]; then
 		# already scanned, do not do it again:
@@ -31,28 +44,7 @@ modules_scan() {
 	MODS=`cat /etc/modules/${1}`
 	for x in ${MODS}
 	do
-		MLOAD=`echo ${MLIST} | sed -e "s/.*${x}.*/${x}/"`
-		if [ "${MLOAD}" = "${x}" ] # Only module to no-load
-		then
-			echo -e "${BOLD}   ::${NORMAL} Skipping ${x}..."
-		elif [ "${MLOAD}" = "${MLIST}" ] # == No change == No specified no-load
-		then
-			if [ -b "${REAL_ROOT}" ]; then
-				echo "Root block device found, skipping other modules..."
-				break
-			fi
-			[ -n "${DEBUG}" ] && echo -ne "${BOLD}   ::${NORMAL} Checking for ${x}..."
-			# find -name does not work since the return status is always zero
-			if find /lib/modules/${KV} | grep /"${x}${KSUFF}" >/dev/null 2>&1
-			then
-				echo -ne "${BOLD}   ::${NORMAL} Scanning for ${x}..."
-				modprobe ${x} -n
-				backup
-				echo -ne "${NORMAL}"
-			fi
-		else
-			echo -e "${BOLD}   ::${NORMAL} Skipping ${x}..."
-		fi
+		mod_single_load $x
 	done
 }
 
