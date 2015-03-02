@@ -334,7 +334,7 @@ then
 		# if the root filesystem type was specified, then try to load just the filesystem
 		# module that we need. 
 		if find /lib/modules/${KV} | grep /"${ROOTFSTYPE}${KSUFF}" > /dev/null 2>&1; then
-			modprobe $ROOTFSTYPE -n
+			mod_single_load $ROOTFSTYPE
 		fi
 	
 	fi
@@ -353,9 +353,13 @@ then
 		esac
 	done
 
-	find /sys -name 'modalias' -type f -exec cat '{}' + | sort -u | xargs mod_single_load
-	find /sys -name 'modalias' -type f -exec cat '{}' + | sort -u | xargs mod_single_load
-	
+	for x in $(find /sys -name 'modalias' -type f -exec cat '{}' + | sort -u ); do
+		mod_single_load $x
+	done
+	for x in $(find /sys -name 'modalias' -type f -exec cat '{}' + | sort -u ); do
+		mod_single_load $x
+	done
+		
 	mdev -s || bad_msg "mdev -s failed"
 
 	# At this point, assuming the user specified the subsystems
